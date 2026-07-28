@@ -57,6 +57,10 @@
         "webhookUrl": {
           "type": "string",
           "description": "Feishu webhook URL (only for feishu method)"
+        },
+        "webhookSecret": {
+          "type": "string",
+          "description": "Feishu webhook sign secret (only for feishu method with signature verification)"
         }
       }
     },

@@ -126,10 +126,8 @@ async function sendTelegram(text, botToken, chatId) {
 // -- Feishu Webhook Delivery -------------------------------------------------
 
 // Sends the digest via Feishu (Lark) custom bot webhook.
-// Uses "post" (rich text) format for better formatting with links.
-async function sendFeishu(text, webhookUrl) {
-  // Feishu has a content length limit per message.
-  // If the digest is longer, we split it into multiple messages.
+// Supports optional signature verification (HMAC-SHA256).
+async function sendFeishu(text, webhookUrl, secret) {
   const MAX_LEN = 30000;
   const chunks = [];
   let remaining = text;
@@ -145,15 +143,29 @@ async function sendFeishu(text, webhookUrl) {
   }
 
   for (const chunk of chunks) {
+    let body;
+    if (secret) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const crypto = await import('crypto');
+      const signStr = `${timestamp}\n${secret}`;
+      const sign = crypto.createHmac('sha256', signStr).digest('base64');
+      body = JSON.stringify({
+        timestamp,
+        sign,
+        msg_type: 'text',
+        content: { text: chunk }
+      });
+    } else {
+      body = JSON.stringify({
+        msg_type: 'text',
+        content: { text: chunk }
+      });
+    }
+
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        msg_type: 'text',
-        content: {
-          text: chunk
-        }
-      })
+      body
     });
 
     if (!res.ok) {
@@ -161,7 +173,6 @@ async function sendFeishu(text, webhookUrl) {
       throw new Error(`Feishu webhook error: ${err}`);
     }
 
-    // Small delay between chunks
     if (chunks.length > 1) await new Promise(r => setTimeout(r, 500));
   }
 }
@@ -230,8 +241,9 @@ async function main() {
 
       case 'feishu': {
         const webhookUrl = delivery.webhookUrl;
+        const secret = process.env.FEISHU_WEBHOOK_SECRET || delivery.webhookSecret;
         if (!webhookUrl) throw new Error('delivery.webhookUrl not found in config.json');
-        await sendFeishu(digestText, webhookUrl);
+        await sendFeishu(digestText, webhookUrl, secret);
         console.log(JSON.stringify({
           status: 'ok',
           method: 'feishu',
