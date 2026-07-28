@@ -4,7 +4,7 @@
 // Follow Builders — Delivery Script
 // ============================================================================
 // Sends a digest to the user via their chosen delivery method.
-// Supports: Telegram bot, Email (via Resend), or stdout (default).
+// Supports: Telegram bot, Email (via Resend), Feishu webhook, or stdout (default).
 //
 // Usage:
 //   echo "digest text" | node deliver.js
@@ -17,6 +17,7 @@
 // Delivery methods:
 //   - "telegram": sends via Telegram Bot API (needs TELEGRAM_BOT_TOKEN + chat ID)
 //   - "email": sends via Resend API (needs RESEND_API_KEY + email address)
+//   - "feishu": sends via Feishu webhook (needs delivery.webhookUrl in config.json)
 //   - "stdout" (default): just prints to terminal
 // ============================================================================
 
@@ -122,6 +123,49 @@ async function sendTelegram(text, botToken, chatId) {
   }
 }
 
+// -- Feishu Webhook Delivery -------------------------------------------------
+
+// Sends the digest via Feishu (Lark) custom bot webhook.
+// Uses "post" (rich text) format for better formatting with links.
+async function sendFeishu(text, webhookUrl) {
+  // Feishu has a content length limit per message.
+  // If the digest is longer, we split it into multiple messages.
+  const MAX_LEN = 30000;
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_LEN) {
+      chunks.push(remaining);
+      break;
+    }
+    let splitAt = remaining.lastIndexOf('\n', MAX_LEN);
+    if (splitAt < MAX_LEN * 0.5) splitAt = MAX_LEN;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt);
+  }
+
+  for (const chunk of chunks) {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg_type: 'text',
+        content: {
+          text: chunk
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Feishu webhook error: ${err}`);
+    }
+
+    // Small delay between chunks
+    if (chunks.length > 1) await new Promise(r => setTimeout(r, 500));
+  }
+}
+
 // -- Email Delivery (Resend) -------------------------------------------------
 
 // Sends the digest via Resend's email API.
@@ -180,6 +224,18 @@ async function main() {
           status: 'ok',
           method: 'telegram',
           message: 'Digest sent to Telegram'
+        }));
+        break;
+      }
+
+      case 'feishu': {
+        const webhookUrl = delivery.webhookUrl;
+        if (!webhookUrl) throw new Error('delivery.webhookUrl not found in config.json');
+        await sendFeishu(digestText, webhookUrl);
+        console.log(JSON.stringify({
+          status: 'ok',
+          method: 'feishu',
+          message: 'Digest sent to Feishu'
         }));
         break;
       }

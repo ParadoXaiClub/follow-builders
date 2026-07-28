@@ -74,10 +74,11 @@ and move on.
 Tell the user:
 
 "Since you're not using a persistent agent, I need a way to send you the digest
-when you're not in this terminal. You have two options:
+when you're not in this terminal. You have three options:
 
 1. **Telegram** — I'll send it as a Telegram message (free, takes ~5 min to set up)
-2. **Email** — I'll email it to you (requires a free Resend account)
+2. **飞书 Feishu** — I'll send it via Feishu bot webhook (free, just paste a webhook URL)
+3. **Email** — I'll email it to you (requires a free Resend account)
 
 Or you can skip this and just type /ai whenever you want your digest — but it
 won't arrive automatically."
@@ -99,7 +100,14 @@ curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -c "import sy
 
 Save the chat ID in config.json under `delivery.chatId`.
 
-**If they choose Email:**
+**If they choose 飞书 Feishu:**
+1. Open your Feishu/Lark group chat
+2. Click Settings → Group Settings → Bots → Add Bot → Custom Bot
+3. Set a name (e.g. "AI Builders Digest") and optionally an avatar
+4. Copy the webhook URL (starts with `https://open.feishu.cn/open-apis/bot/v2/hook/...`)
+5. Paste it when I ask for it
+
+Save the webhook URL to config.json under `delivery.webhookUrl`.
 Ask for their email address.
 Then they need a Resend API key:
 1. Go to https://resend.com
@@ -124,6 +132,9 @@ Ask: "What language do you prefer for your digest?"
 
 **If the user chose "stdout" or "right here" delivery:** No API keys needed at all!
 All content is fetched centrally. Skip to Step 6.
+
+**If the user chose 飞书 Feishu:** No API keys needed! The webhook URL is already
+saved in config.json. Skip to Step 6.
 
 **If the user chose Telegram or Email delivery:**
 Create the .env file with only the delivery key they need:
